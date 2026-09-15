@@ -1,0 +1,252 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Lead,
+  getLeads,
+  getFranqueados,
+  getRespostas,
+  reservarLead,
+  responderLead,
+} from "./lib/api";
+import { formatDuration, formatRelative, formatDateTime } from "./lib/format";
+
+export default function Home() {
+  const [leads, setLeads] = useState<Lead[] | null>(null);
+  const [franqueados, setFranqueados] = useState<string[]>([]);
+  const [respostas, setRespostas] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectFranqueado, setSelectFranqueado] = useState<Record<string, string>>({});
+  const [selectResposta, setSelectResposta] = useState<Record<string, string>>({});
+
+  async function loadAll() {
+    try {
+      const [l, f, r] = await Promise.all([getLeads(), getFranqueados(), getRespostas()]);
+      setLeads(l);
+      setFranqueados(f);
+      setRespostas(r);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao carregar dados");
+    }
+  }
+
+  useEffect(() => {
+    loadAll();
+    const interval = setInterval(loadAll, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const { pendentes, emAndamento, concluidos } = useMemo(() => {
+    const pendentes: Lead[] = [];
+    const emAndamento: Lead[] = [];
+    const concluidos: Lead[] = [];
+    for (const lead of leads ?? []) {
+      if (!lead.reserved_by) pendentes.push(lead);
+      else if (!lead.response) emAndamento.push(lead);
+      else concluidos.push(lead);
+    }
+    return { pendentes, emAndamento, concluidos };
+  }, [leads]);
+
+  async function handleReservar(lead: Lead) {
+    const franqueado = selectFranqueado[lead.id];
+    if (!franqueado) return;
+    setBusyId(lead.id);
+    try {
+      await loadAll();
+      const updated = await reservarLead(lead.id, franqueado);
+      setLeads((prev) => prev?.map((l) => (l.id === lead.id ? updated : l)) ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao reservar lead");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleResponder(lead: Lead) {
+    const resposta = selectResposta[lead.id];
+    if (!resposta) return;
+    setBusyId(lead.id);
+    try {
+      const updated = await responderLead(lead.id, resposta);
+      setLeads((prev) => prev?.map((l) => (l.id === lead.id ? updated : l)) ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao registrar resposta");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f5f6f8]">
+      <header className="bg-[#072a3c] text-white px-6 py-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Gestor de Leads · Seguro Já</h1>
+          <p className="text-sm text-white/70">Reserve um lead para trabalhar e registre o retorno do cliente</p>
+        </div>
+        <button
+          onClick={loadAll}
+          className="border border-[#c2a360] text-[#c2a360] px-4 py-2 rounded text-sm hover:bg-[#c2a360] hover:text-[#072a3c] transition"
+        >
+          Atualizar
+        </button>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 py-6 space-y-8">
+        {error && (
+          <div className="bg-red-100 text-red-800 border border-red-300 rounded px-4 py-2 text-sm">{error}</div>
+        )}
+
+        {leads === null && !error && <p className="text-gray-500">Carregando leads...</p>}
+
+        <Section title={`Leads novos (${pendentes.length})`} subtitle="Ainda sem franqueado reservando">
+          {pendentes.length === 0 && <EmptyState text="Nenhum lead novo no momento." />}
+          <div className="grid gap-3">
+            {pendentes.map((lead) => (
+              <Card key={lead.id}>
+                <LeadInfo lead={lead} />
+                <div className="flex items-center gap-2 mt-3">
+                  <select
+                    className="border rounded px-2 py-1.5 text-sm flex-1"
+                    value={selectFranqueado[lead.id] ?? ""}
+                    onChange={(e) =>
+                      setSelectFranqueado((prev) => ({ ...prev, [lead.id]: e.target.value }))
+                    }
+                  >
+                    <option value="">Selecione seu franqueado...</option>
+                    {franqueados.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!selectFranqueado[lead.id] || busyId === lead.id}
+                    onClick={() => handleReservar(lead)}
+                    className="bg-[#072a3c] text-white px-4 py-1.5 rounded text-sm disabled:opacity-40"
+                  >
+                    Reservar
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">Entrou no sistema {formatRelative(lead.synced_at)}</p>
+              </Card>
+            ))}
+          </div>
+        </Section>
+
+        <Section title={`Em andamento (${emAndamento.length})`} subtitle="Reservados, aguardando retorno">
+          {emAndamento.length === 0 && <EmptyState text="Nenhum lead em andamento." />}
+          <div className="grid gap-3">
+            {emAndamento.map((lead) => (
+              <Card key={lead.id}>
+                <LeadInfo lead={lead} />
+                <p className="text-xs text-gray-500 mt-2">
+                  Reservado por <b>{lead.reserved_by}</b> · demorou{" "}
+                  {formatDuration(lead.tempo_reserva_segundos)} para reservar
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <select
+                    className="border rounded px-2 py-1.5 text-sm flex-1"
+                    value={selectResposta[lead.id] ?? ""}
+                    onChange={(e) =>
+                      setSelectResposta((prev) => ({ ...prev, [lead.id]: e.target.value }))
+                    }
+                  >
+                    <option value="">Qual foi a resposta do cliente?</option>
+                    {respostas.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!selectResposta[lead.id] || busyId === lead.id}
+                    onClick={() => handleResponder(lead)}
+                    className="bg-[#c2a360] text-[#072a3c] px-4 py-1.5 rounded text-sm font-medium disabled:opacity-40"
+                  >
+                    Salvar
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
+
+        <Section title={`Concluídos (${concluidos.length})`} subtitle="Histórico de leads finalizados">
+          {concluidos.length === 0 && <EmptyState text="Nenhum lead concluído ainda." />}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm bg-white rounded shadow-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="p-3">Lead</th>
+                  <th className="p-3">Franqueado</th>
+                  <th className="p-3">Resposta</th>
+                  <th className="p-3">Tempo p/ reservar</th>
+                  <th className="p-3">Tempo p/ responder</th>
+                  <th className="p-3">Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {concluidos.map((lead) => (
+                  <tr key={lead.id} className="border-b last:border-0">
+                    <td className="p-3">
+                      <div className="font-medium">{lead.full_name}</div>
+                      <div className="text-gray-400 text-xs">{lead.phone_number}</div>
+                    </td>
+                    <td className="p-3">{lead.reserved_by}</td>
+                    <td className="p-3">{lead.response}</td>
+                    <td className="p-3">{formatDuration(lead.tempo_reserva_segundos)}</td>
+                    <td className="p-3">{formatDuration(lead.tempo_resposta_segundos)}</td>
+                    <td className="p-3 text-gray-400">
+                      {lead.response_at && formatDateTime(lead.response_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      </main>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold text-[#072a3c]">{title}</h2>
+        <p className="text-sm text-gray-500">{subtitle}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return <div className="bg-white rounded-lg shadow-sm border p-4">{children}</div>;
+}
+
+function LeadInfo({ lead }: { lead: Lead }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3">
+      <span className="font-medium text-[#072a3c]">{lead.full_name}</span>
+      {lead.phone_number && <span className="text-sm text-gray-500">{lead.phone_number}</span>}
+      {lead.email && <span className="text-sm text-gray-400">{lead.email}</span>}
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <p className="text-sm text-gray-400 italic">{text}</p>;
+}
