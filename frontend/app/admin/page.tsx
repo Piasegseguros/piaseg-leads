@@ -91,8 +91,11 @@ function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [reatribuirSelecao, setReatribuirSelecao] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date | null>(null);
 
   async function loadAll() {
+    setSincronizando(true);
     try {
       await syncNow().catch(() => {});
       const [l, s, f] = await Promise.all([getLeads(), getAdminStats(), getFranqueados()]);
@@ -100,8 +103,11 @@ function AdminDashboard() {
       setStats(s);
       setFranqueados(f);
       setError(null);
+      setUltimaAtualizacao(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar dados");
+    } finally {
+      setSincronizando(false);
     }
   }
 
@@ -146,12 +152,20 @@ function AdminDashboard() {
               {statsMesAtual.nome}: recebemos {statsMesAtual.total_leads} leads
             </p>
           )}
-          <button
-            onClick={loadAll}
-            className="border border-[#c2a360] text-[#c2a360] px-4 py-2 rounded text-sm hover:bg-[#c2a360] hover:text-[#072a3c] transition shrink-0"
-          >
-            Atualizar
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={loadAll}
+              disabled={sincronizando}
+              className="border border-[#c2a360] text-[#c2a360] px-4 py-2 rounded text-sm hover:bg-[#c2a360] hover:text-[#072a3c] transition shrink-0 disabled:opacity-60"
+            >
+              {sincronizando ? "Buscando leads novas..." : "Atualizar"}
+            </button>
+            {ultimaAtualizacao && !sincronizando && (
+              <span className="text-xs text-white/50">
+                Atualizado às {ultimaAtualizacao.toLocaleTimeString("pt-BR")}
+              </span>
+            )}
+          </div>
         </div>
       </header>
 
