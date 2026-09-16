@@ -1,7 +1,8 @@
+import logging
 import os
 from datetime import datetime, timezone
-from typing import Optional
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -10,6 +11,10 @@ from sqlalchemy import desc
 from database import Base, engine, SessionLocal
 from models import Lead
 from franqueados import get_franqueados_ativos
+from sync import sync_leads
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("piaseg-leads")
 
 RESPOSTAS_PADRAO = [
     "Não responde",
@@ -22,7 +27,6 @@ RESPOSTAS_PADRAO = [
 
 RESERVA_COOLDOWN_SEGUNDOS = 5 * 60
 
-INGEST_TOKEN = os.environ["INGEST_TOKEN"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 
 
@@ -44,6 +48,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _run_sync():
+    try:
+        n = sync_leads()
+        if n:
+            logger.info(f"sync: {n} leads novos")
+    except Exception:
+        logger.exception("falha ao sincronizar leads")
+
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(_run_sync, "interval", minutes=5, id="sync_leads")
+
+
+@app.on_event("startup")
+def startup():
+    scheduler.start()
+    _run_sync()
 
 
 @app.get("/health")
@@ -226,32 +249,7 @@ def admin_stats(_: None = Depends(_checar_admin)):
         db.close()
 
 
-class LeadIn(BaseModel):
-    id: str
-    created_time: datetime
-    full_name: str
-    email: Optional[str] = None
-    phone_number: Optional[str] = None
-    campaign_name: Optional[str] = None
-    ad_name: Optional[str] = None
-
-
-@app.post("/admin/ingest-leads")
-def ingest_leads(leads: list[LeadIn], x_ingest_token: str = Header(None)):
-    if x_ingest_token != INGEST_TOKEN:
-        raise HTTPException(401, "Token inválido")
-
-    db = SessionLocal()
-    try:
-        existing_ids = {lid for (lid,) in db.query(Lead.id).all()}
-        now = datetime.now(timezone.utc)
-        novos = 0
-        for data in leads:
-            if data.id in existing_ids:
-                continue
-            db.add(Lead(**data.model_dump(), synced_at=now))
-            novos += 1
-        db.commit()
-        return {"novos": novos}
-    finally:
-        db.close()
+@app.post("/admin/sync")
+def manual_sync(_: None = Depends(_checar_admin)):
+    n = sync_leads()
+    return {"novos": n}
