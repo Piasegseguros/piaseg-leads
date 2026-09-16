@@ -152,8 +152,16 @@ function AdminDashboard() {
           <p className="text-gray-500">Carregando...</p>
         ) : (
           <>
-            <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatTile label="Total de leads" value={String(stats.total_leads)} />
+              <StatTile
+                label="Conversão de vendas"
+                value={
+                  stats.total_leads > 0
+                    ? `${((stats.por_resposta["Negócio Fechado"] ?? 0) / stats.total_leads * 100).toFixed(1)}%`
+                    : "-"
+                }
+              />
               <StatTile
                 label="Tempo médio até reservar"
                 value={formatDuration(stats.tempo_medio_reserva_segundos)}
