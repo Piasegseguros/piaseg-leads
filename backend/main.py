@@ -60,7 +60,7 @@ def _run_sync():
 
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(_run_sync, "interval", minutes=5, id="sync_leads")
+scheduler.add_job(_run_sync, "interval", minutes=15, id="sync_leads")
 
 
 @app.on_event("startup")
