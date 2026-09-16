@@ -16,6 +16,8 @@ RESPOSTAS_PADRAO = [
     "Negócio Fechado",
     "Negócio Agendado",
     "Sem interesse",
+    "Demorei para entrar em contato",
+    "Já é renovação do Grupo Piaseg",
 ]
 
 RESERVA_COOLDOWN_SEGUNDOS = 5 * 60
