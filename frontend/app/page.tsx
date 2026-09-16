@@ -8,6 +8,7 @@ import {
   getRespostas,
   reservarLead,
   responderLead,
+  syncNow,
 } from "./lib/api";
 import { formatDuration, formatDateTime } from "./lib/format";
 
@@ -22,6 +23,7 @@ export default function Home() {
 
   async function loadAll() {
     try {
+      await syncNow().catch(() => {});
       const [l, f, r] = await Promise.all([getLeads(), getFranqueados(), getRespostas()]);
       setLeads(l);
       setFranqueados(f);

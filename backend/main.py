@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -67,6 +68,20 @@ scheduler.add_job(_run_sync, "interval", minutes=15, id="sync_leads")
 def startup():
     scheduler.start()
     _run_sync()
+
+
+_ultimo_sync_manual = 0.0
+SYNC_MANUAL_INTERVALO_MIN_SEGUNDOS = 20
+
+
+@app.post("/sync")
+def sync_now():
+    global _ultimo_sync_manual
+    agora = time.time()
+    if agora - _ultimo_sync_manual < SYNC_MANUAL_INTERVALO_MIN_SEGUNDOS:
+        return {"novos": 0}
+    _ultimo_sync_manual = agora
+    return {"novos": sync_leads()}
 
 
 @app.get("/health")

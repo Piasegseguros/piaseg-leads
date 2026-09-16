@@ -56,6 +56,7 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const getLeads = () => api<Lead[]>("/leads");
+export const syncNow = () => api<{ novos: number }>("/sync", { method: "POST" });
 export const getFranqueados = () => api<string[]>("/franqueados");
 export const getRespostas = () => api<string[]>("/respostas");
 

@@ -12,6 +12,7 @@ import {
   getAdminPassword,
   setAdminPassword,
   clearAdminPassword,
+  syncNow,
 } from "../lib/api";
 import { formatDuration, formatDateTime } from "../lib/format";
 
@@ -93,6 +94,7 @@ function AdminDashboard() {
 
   async function loadAll() {
     try {
+      await syncNow().catch(() => {});
       const [l, s, f] = await Promise.all([getLeads(), getAdminStats(), getFranqueados()]);
       setLeads(l);
       setStats(s);
