@@ -12,6 +12,10 @@ CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&
 
 TEST_EMAILS = {"test@meta.com"}
 
+# Operação começou do zero em 2026-09-16: leads anteriores a isso já
+# foram tratados manualmente e não devem voltar a aparecer no painel.
+SYNC_CUTOFF = datetime(2026, 9, 16, 17, 0, tzinfo=timezone.utc)
+
 
 def _fetch_rows():
     with urllib.request.urlopen(CSV_URL, timeout=30) as resp:
@@ -35,6 +39,8 @@ def _parse_rows():
             phone = phone.replace("p:", "")
 
         created_time = datetime.fromisoformat(row["created_time"])
+        if created_time < SYNC_CUTOFF:
+            continue
 
         yield {
             "id": lead_id,

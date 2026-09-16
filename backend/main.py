@@ -194,6 +194,17 @@ def admin_login(_: None = Depends(_checar_admin)):
     return {"ok": True}
 
 
+@app.post("/admin/remover-leads-antigos")
+def remover_leads_antigos(_: None = Depends(_checar_admin)):
+    db = SessionLocal()
+    try:
+        n = db.query(Lead).delete()
+        db.commit()
+        return {"leads_removidos": n}
+    finally:
+        db.close()
+
+
 @app.post("/admin/reset-indicadores")
 def reset_indicadores(_: None = Depends(_checar_admin)):
     db = SessionLocal()
