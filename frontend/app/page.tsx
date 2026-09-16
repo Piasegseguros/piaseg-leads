@@ -46,17 +46,26 @@ export default function Home() {
     return map;
   }, [leads]);
 
-  const { pendentes, emAndamento, concluidos } = useMemo(() => {
+  const { pendentes, emAndamento } = useMemo(() => {
     const pendentes: Lead[] = [];
     const emAndamento: Lead[] = [];
-    const concluidos: Lead[] = [];
     for (const lead of leads ?? []) {
       if (!lead.reserved_by) pendentes.push(lead);
       else if (!lead.response) emAndamento.push(lead);
-      else concluidos.push(lead);
     }
-    return { pendentes, emAndamento, concluidos };
+    return { pendentes, emAndamento };
   }, [leads]);
+
+  const leadsNoMes = useMemo(() => {
+    const agora = new Date();
+    return (leads ?? []).filter((lead) => {
+      const d = new Date(lead.synced_at);
+      return d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear();
+    }).length;
+  }, [leads]);
+
+  const nomeMes = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date());
+  const nomeMesCapitalizado = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
 
 
   async function handleReservar(lead: Lead) {
@@ -95,12 +104,19 @@ export default function Home() {
           <h1 className="text-xl font-semibold">Gestor de Leads · Seguro Já</h1>
           <p className="text-sm text-white/70">Reserve um lead para trabalhar e registre o retorno do cliente</p>
         </div>
-        <button
-          onClick={loadAll}
-          className="border border-[#c2a360] text-[#c2a360] px-4 py-2 rounded text-sm hover:bg-[#c2a360] hover:text-[#072a3c] transition"
-        >
-          Atualizar
-        </button>
+        <div className="flex items-center gap-4">
+          {leads !== null && (
+            <p className="text-[#c2a360] font-bold text-base sm:text-lg text-right">
+              {nomeMesCapitalizado}: recebemos {leadsNoMes} leads
+            </p>
+          )}
+          <button
+            onClick={loadAll}
+            className="border border-[#c2a360] text-[#c2a360] px-4 py-2 rounded text-sm hover:bg-[#c2a360] hover:text-[#072a3c] transition shrink-0"
+          >
+            Atualizar
+          </button>
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-8">
@@ -179,41 +195,6 @@ export default function Home() {
                 </div>
               </Card>
             ))}
-          </div>
-        </Section>
-
-        <Section title={`Concluídos (${concluidos.length})`} subtitle="Histórico de leads finalizados">
-          {concluidos.length === 0 && <EmptyState text="Nenhum lead concluído ainda." />}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm bg-white rounded shadow-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="p-3">Lead</th>
-                  <th className="p-3">Franqueado</th>
-                  <th className="p-3">Resposta</th>
-                  <th className="p-3">Tempo p/ reservar</th>
-                  <th className="p-3">Tempo p/ responder</th>
-                  <th className="p-3">Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {concluidos.map((lead) => (
-                  <tr key={lead.id} className="border-b last:border-0">
-                    <td className="p-3">
-                      <div className="font-medium">{lead.full_name}</div>
-                      <div className="text-gray-400 text-xs">{lead.phone_number}</div>
-                    </td>
-                    <td className="p-3">{lead.reserved_by}</td>
-                    <td className="p-3">{lead.response}</td>
-                    <td className="p-3">{formatDuration(lead.tempo_reserva_segundos)}</td>
-                    <td className="p-3">{formatDuration(lead.tempo_resposta_segundos)}</td>
-                    <td className="p-3 text-gray-400">
-                      {lead.response_at && formatDateTime(lead.response_at)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </Section>
       </main>
