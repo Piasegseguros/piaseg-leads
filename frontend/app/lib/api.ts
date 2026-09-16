@@ -17,17 +17,42 @@ export type Lead = {
   tempo_resposta_segundos: number | null;
 };
 
+const RETRY_DELAYS_MS = [2000, 4000, 8000, 12000];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    ...options,
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail ?? `Erro ${res.status}`);
+  let lastNetworkError: unknown;
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${API}${path}`, {
+        ...options,
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", ...options?.headers },
+      });
+    } catch (e) {
+      // "Failed to fetch": normalmente o backend gratuito no Render está
+      // "acordando" após ficar inativo. Tenta de novo antes de desistir.
+      lastNetworkError = e;
+      if (attempt < RETRY_DELAYS_MS.length) {
+        await sleep(RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw new Error("Não foi possível conectar ao servidor. Tente novamente em alguns segundos.");
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail ?? `Erro ${res.status}`);
+    }
+    return res.json();
   }
-  return res.json();
+
+  throw lastNetworkError;
 }
 
 export const getLeads = () => api<Lead[]>("/leads");
