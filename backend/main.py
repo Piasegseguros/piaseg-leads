@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import Depends, FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import desc
@@ -16,10 +16,21 @@ RESPOSTAS_PADRAO = [
     "Negócio Fechado",
     "Negócio Agendado",
     "Sem interesse",
-    "Achou Caro",
 ]
 
+RESERVA_COOLDOWN_SEGUNDOS = 5 * 60
+
 INGEST_TOKEN = os.environ["INGEST_TOKEN"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+
+
+def _checar_admin(x_admin_password: str = Header(None)):
+    if x_admin_password != ADMIN_PASSWORD:
+        raise HTTPException(401, "Senha de admin inválida")
+
+
+def _as_utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 Base.metadata.create_all(bind=engine)
 
@@ -41,11 +52,11 @@ def health():
 def _serialize(lead: Lead):
     tempo_reserva_s = None
     if lead.reserved_at:
-        tempo_reserva_s = (lead.reserved_at - lead.synced_at).total_seconds()
+        tempo_reserva_s = (_as_utc(lead.reserved_at) - _as_utc(lead.synced_at)).total_seconds()
 
     tempo_resposta_s = None
     if lead.response_at and lead.reserved_at:
-        tempo_resposta_s = (lead.response_at - lead.reserved_at).total_seconds()
+        tempo_resposta_s = (_as_utc(lead.response_at) - _as_utc(lead.reserved_at)).total_seconds()
 
     return {
         "id": lead.id,
@@ -103,6 +114,21 @@ def reservar(lead_id: str, body: ReservarRequest):
         if lead.reserved_by:
             raise HTTPException(409, f"Lead já reservado por {lead.reserved_by}")
 
+        ultima_reserva = (
+            db.query(Lead.reserved_at)
+            .filter(Lead.reserved_by == body.franqueado)
+            .order_by(desc(Lead.reserved_at))
+            .first()
+        )
+        if ultima_reserva:
+            passado = (datetime.now(timezone.utc) - _as_utc(ultima_reserva[0])).total_seconds()
+            if passado < RESERVA_COOLDOWN_SEGUNDOS:
+                restante = int(RESERVA_COOLDOWN_SEGUNDOS - passado)
+                raise HTTPException(
+                    429,
+                    f"Aguarde mais {restante // 60}min {restante % 60}s para reservar outro lead",
+                )
+
         lead.reserved_by = body.franqueado
         lead.reserved_at = datetime.now(timezone.utc)
         db.commit()
@@ -134,6 +160,66 @@ def responder(lead_id: str, body: RespostaRequest):
         db.commit()
         db.refresh(lead)
         return _serialize(lead)
+    finally:
+        db.close()
+
+
+@app.post("/admin/login")
+def admin_login(_: None = Depends(_checar_admin)):
+    return {"ok": True}
+
+
+class ReatribuirRequest(BaseModel):
+    franqueado: str
+
+
+@app.post("/admin/leads/{lead_id}/reatribuir")
+def reatribuir(lead_id: str, body: ReatribuirRequest, _: None = Depends(_checar_admin)):
+    ativos = get_franqueados_ativos()
+    if body.franqueado not in ativos:
+        raise HTTPException(400, "Franqueado não encontrado na lista")
+
+    db = SessionLocal()
+    try:
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            raise HTTPException(404, "Lead não encontrado")
+
+        lead.reserved_by = body.franqueado
+        lead.reserved_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(lead)
+        return _serialize(lead)
+    finally:
+        db.close()
+
+
+@app.get("/admin/stats")
+def admin_stats(_: None = Depends(_checar_admin)):
+    db = SessionLocal()
+    try:
+        leads = db.query(Lead).all()
+        por_resposta = {r: 0 for r in RESPOSTAS_PADRAO}
+        por_resposta["Sem retorno"] = 0
+        tempos_reserva = []
+        tempos_resposta = []
+
+        for lead in leads:
+            if lead.response:
+                por_resposta[lead.response] = por_resposta.get(lead.response, 0) + 1
+            else:
+                por_resposta["Sem retorno"] += 1
+            if lead.reserved_at:
+                tempos_reserva.append((_as_utc(lead.reserved_at) - _as_utc(lead.synced_at)).total_seconds())
+            if lead.response_at and lead.reserved_at:
+                tempos_resposta.append((_as_utc(lead.response_at) - _as_utc(lead.reserved_at)).total_seconds())
+
+        return {
+            "total_leads": len(leads),
+            "por_resposta": por_resposta,
+            "tempo_medio_reserva_segundos": sum(tempos_reserva) / len(tempos_reserva) if tempos_reserva else None,
+            "tempo_medio_resposta_segundos": sum(tempos_resposta) / len(tempos_resposta) if tempos_resposta else None,
+        }
     finally:
         db.close()
 

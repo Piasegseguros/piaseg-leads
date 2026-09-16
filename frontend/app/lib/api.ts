@@ -45,3 +45,42 @@ export const responderLead = (id: string, resposta: string) =>
     method: "POST",
     body: JSON.stringify({ resposta }),
   });
+
+export type AdminStats = {
+  total_leads: number;
+  por_resposta: Record<string, number>;
+  tempo_medio_reserva_segundos: number | null;
+  tempo_medio_resposta_segundos: number | null;
+};
+
+const ADMIN_PASSWORD_KEY = "piaseg_leads_admin_password";
+
+export const getAdminPassword = () =>
+  typeof window === "undefined" ? null : sessionStorage.getItem(ADMIN_PASSWORD_KEY);
+
+export const setAdminPassword = (password: string) =>
+  sessionStorage.setItem(ADMIN_PASSWORD_KEY, password);
+
+export const clearAdminPassword = () => sessionStorage.removeItem(ADMIN_PASSWORD_KEY);
+
+async function adminApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const password = getAdminPassword() ?? "";
+  return api<T>(path, {
+    ...options,
+    headers: { "X-Admin-Password": password, ...options?.headers },
+  });
+}
+
+export const adminLogin = (password: string) =>
+  api<{ ok: boolean }>("/admin/login", {
+    method: "POST",
+    headers: { "X-Admin-Password": password },
+  });
+
+export const getAdminStats = () => adminApi<AdminStats>("/admin/stats");
+
+export const reatribuirLead = (id: string, franqueado: string) =>
+  adminApi<Lead>(`/admin/leads/${encodeURIComponent(id)}/reatribuir`, {
+    method: "POST",
+    body: JSON.stringify({ franqueado }),
+  });
