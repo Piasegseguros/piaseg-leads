@@ -194,6 +194,22 @@ def admin_login(_: None = Depends(_checar_admin)):
     return {"ok": True}
 
 
+@app.post("/admin/reset-indicadores")
+def reset_indicadores(_: None = Depends(_checar_admin)):
+    db = SessionLocal()
+    try:
+        leads = db.query(Lead).all()
+        for lead in leads:
+            lead.reserved_by = None
+            lead.reserved_at = None
+            lead.response = None
+            lead.response_at = None
+        db.commit()
+        return {"leads_resetados": len(leads)}
+    finally:
+        db.close()
+
+
 class ReatribuirRequest(BaseModel):
     franqueado: str
 
