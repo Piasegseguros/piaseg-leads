@@ -71,11 +71,22 @@ export const responderLead = (id: string, resposta: string) =>
     body: JSON.stringify({ resposta }),
   });
 
-export type AdminStats = {
+export type MesStats = {
+  mes: number;
+  nome: string;
   total_leads: number;
   por_resposta: Record<string, number>;
   tempo_medio_reserva_segundos: number | null;
   tempo_medio_resposta_segundos: number | null;
+};
+
+export type AdminStats = {
+  ano: number;
+  total_leads: number;
+  por_resposta: Record<string, number>;
+  tempo_medio_reserva_segundos: number | null;
+  tempo_medio_resposta_segundos: number | null;
+  meses: MesStats[];
 };
 
 const ADMIN_PASSWORD_KEY = "piaseg_leads_admin_password";

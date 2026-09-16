@@ -219,31 +219,60 @@ def reatribuir(lead_id: str, body: ReatribuirRequest, _: None = Depends(_checar_
         db.close()
 
 
+MESES_PT = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+]
+
+
+def _calcular_bloco(leads: list[Lead]):
+    por_resposta = {r: 0 for r in RESPOSTAS_PADRAO}
+    por_resposta["Sem retorno"] = 0
+    tempos_reserva = []
+    tempos_resposta = []
+
+    for lead in leads:
+        if lead.response:
+            por_resposta[lead.response] = por_resposta.get(lead.response, 0) + 1
+        else:
+            por_resposta["Sem retorno"] += 1
+        if lead.reserved_at:
+            tempos_reserva.append((_as_utc(lead.reserved_at) - _as_utc(lead.synced_at)).total_seconds())
+        if lead.response_at and lead.reserved_at:
+            tempos_resposta.append((_as_utc(lead.response_at) - _as_utc(lead.reserved_at)).total_seconds())
+
+    return {
+        "total_leads": len(leads),
+        "por_resposta": por_resposta,
+        "tempo_medio_reserva_segundos": sum(tempos_reserva) / len(tempos_reserva) if tempos_reserva else None,
+        "tempo_medio_resposta_segundos": sum(tempos_resposta) / len(tempos_resposta) if tempos_resposta else None,
+    }
+
+
 @app.get("/admin/stats")
-def admin_stats(_: None = Depends(_checar_admin)):
+def admin_stats(ano: int = None, _: None = Depends(_checar_admin)):
     db = SessionLocal()
     try:
-        leads = db.query(Lead).all()
-        por_resposta = {r: 0 for r in RESPOSTAS_PADRAO}
-        por_resposta["Sem retorno"] = 0
-        tempos_reserva = []
-        tempos_resposta = []
+        todos = db.query(Lead).all()
+        ano_selecionado = ano or datetime.now(timezone.utc).year
+        leads_ano = [l for l in todos if _as_utc(l.synced_at).year == ano_selecionado]
 
-        for lead in leads:
-            if lead.response:
-                por_resposta[lead.response] = por_resposta.get(lead.response, 0) + 1
-            else:
-                por_resposta["Sem retorno"] += 1
-            if lead.reserved_at:
-                tempos_reserva.append((_as_utc(lead.reserved_at) - _as_utc(lead.synced_at)).total_seconds())
-            if lead.response_at and lead.reserved_at:
-                tempos_resposta.append((_as_utc(lead.response_at) - _as_utc(lead.reserved_at)).total_seconds())
+        por_mes: dict[int, list[Lead]] = {}
+        for lead in leads_ano:
+            mes = _as_utc(lead.synced_at).month
+            por_mes.setdefault(mes, []).append(lead)
+
+        meses = []
+        for mes in sorted(por_mes.keys(), reverse=True):
+            bloco = _calcular_bloco(por_mes[mes])
+            bloco["mes"] = mes
+            bloco["nome"] = MESES_PT[mes - 1]
+            meses.append(bloco)
 
         return {
-            "total_leads": len(leads),
-            "por_resposta": por_resposta,
-            "tempo_medio_reserva_segundos": sum(tempos_reserva) / len(tempos_reserva) if tempos_reserva else None,
-            "tempo_medio_resposta_segundos": sum(tempos_resposta) / len(tempos_resposta) if tempos_resposta else None,
+            "ano": ano_selecionado,
+            **_calcular_bloco(leads_ano),
+            "meses": meses,
         }
     finally:
         db.close()

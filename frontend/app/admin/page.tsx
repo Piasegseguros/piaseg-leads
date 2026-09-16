@@ -128,19 +128,29 @@ function AdminDashboard() {
     }
   }
 
+  const mesAtual = new Date().getMonth() + 1;
+  const statsMesAtual = stats?.meses.find((m) => m.mes === mesAtual);
+
   return (
     <div className="min-h-screen bg-[#f5f6f8]">
-      <header className="bg-[#072a3c] text-white px-6 py-5 flex items-center justify-between">
+      <header className="bg-[#072a3c] text-white px-6 py-5 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold">Admin · Gestor de Leads</h1>
           <p className="text-sm text-white/70">Resultados, SLA e reatribuição de leads</p>
         </div>
-        <button
-          onClick={loadAll}
-          className="border border-[#c2a360] text-[#c2a360] px-4 py-2 rounded text-sm hover:bg-[#c2a360] hover:text-[#072a3c] transition"
-        >
-          Atualizar
-        </button>
+        <div className="flex items-center gap-4">
+          {statsMesAtual && (
+            <p className="text-[#c2a360] font-bold text-base sm:text-lg text-right">
+              {statsMesAtual.nome}: recebemos {statsMesAtual.total_leads} leads
+            </p>
+          )}
+          <button
+            onClick={loadAll}
+            className="border border-[#c2a360] text-[#c2a360] px-4 py-2 rounded text-sm hover:bg-[#c2a360] hover:text-[#072a3c] transition shrink-0"
+          >
+            Atualizar
+          </button>
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-8">
@@ -152,28 +162,67 @@ function AdminDashboard() {
           <p className="text-gray-500">Carregando...</p>
         ) : (
           <>
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatTile label="Total de leads" value={String(stats.total_leads)} />
-              <StatTile
-                label="Conversão de vendas"
-                value={
-                  stats.total_leads > 0
-                    ? `${((stats.por_resposta["Negócio Fechado"] ?? 0) / stats.total_leads * 100).toFixed(1)}%`
-                    : "-"
-                }
-              />
-              <StatTile
-                label="Tempo médio até reservar"
-                value={formatDuration(stats.tempo_medio_reserva_segundos)}
-              />
-              <StatTile
-                label="Tempo médio até responder"
-                value={formatDuration(stats.tempo_medio_resposta_segundos)}
-              />
+            <section>
+              <h2 className="text-base font-semibold text-[#072a3c] mb-3">
+                Média geral de {stats.ano}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatTile label="Total de leads no ano" value={String(stats.total_leads)} />
+                <StatTile
+                  label="Conversão de vendas no ano"
+                  value={
+                    stats.total_leads > 0
+                      ? `${((stats.por_resposta["Negócio Fechado"] ?? 0) / stats.total_leads * 100).toFixed(1)}%`
+                      : "-"
+                  }
+                />
+                <StatTile
+                  label="Tempo médio até reservar"
+                  value={formatDuration(stats.tempo_medio_reserva_segundos)}
+                />
+                <StatTile
+                  label="Tempo médio até responder"
+                  value={formatDuration(stats.tempo_medio_resposta_segundos)}
+                />
+              </div>
+            </section>
+
+            <section className="bg-white rounded-lg shadow-sm border overflow-x-auto">
+              <h2 className="text-base font-semibold text-[#072a3c] px-5 pt-5 pb-3">
+                Indicadores mês a mês ({stats.ano})
+              </h2>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="p-3">Mês</th>
+                    <th className="p-3">Total de leads</th>
+                    <th className="p-3">Conversão</th>
+                    <th className="p-3">Tempo médio p/ reservar</th>
+                    <th className="p-3">Tempo médio p/ responder</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.meses.map((m) => (
+                    <tr key={m.mes} className="border-b last:border-0">
+                      <td className="p-3 font-medium">{m.nome}</td>
+                      <td className="p-3 tabular-nums">{m.total_leads}</td>
+                      <td className="p-3 tabular-nums">
+                        {m.total_leads > 0
+                          ? `${((m.por_resposta["Negócio Fechado"] ?? 0) / m.total_leads * 100).toFixed(1)}%`
+                          : "-"}
+                      </td>
+                      <td className="p-3">{formatDuration(m.tempo_medio_reserva_segundos)}</td>
+                      <td className="p-3">{formatDuration(m.tempo_medio_resposta_segundos)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </section>
 
             <section className="bg-white rounded-lg shadow-sm border p-5">
-              <h2 className="text-base font-semibold text-[#072a3c] mb-4">Leads por resultado</h2>
+              <h2 className="text-base font-semibold text-[#072a3c] mb-4">
+                Leads por resultado ({stats.ano})
+              </h2>
               <div className="space-y-3">
                 {Object.entries(stats.por_resposta).map(([label, value]) => (
                   <div key={label} className="flex items-center gap-3">
