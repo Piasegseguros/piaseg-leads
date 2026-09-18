@@ -15,7 +15,6 @@ import {
   syncNow,
 } from "../lib/api";
 import { formatDuration, formatDateTime } from "../lib/format";
-import { exportarExcel } from "./export";
 
 const STATUS_COLOR: Record<string, string> = {
   "Negócio Fechado": "#0ca30c",
@@ -167,13 +166,6 @@ function AdminDashboard() {
               {statsMesAtual.nome}: recebemos {statsMesAtual.total_leads} leads
             </p>
           )}
-          <button
-            onClick={() => stats && exportarExcel(stats, leads ?? [])}
-            disabled={!stats}
-            className="bg-[#c2a360] text-[#072a3c] px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition shrink-0 disabled:opacity-40"
-          >
-            Exportar Excel
-          </button>
           <div className="flex flex-col items-end gap-1">
             <button
               onClick={loadAll}
