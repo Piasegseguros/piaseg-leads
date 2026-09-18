@@ -241,6 +241,20 @@ def criar_lead_manual(body: LeadManualRequest, _: None = Depends(_checar_admin))
         db.close()
 
 
+@app.delete("/admin/leads/{lead_id}")
+def excluir_lead(lead_id: str, _: None = Depends(_checar_admin)):
+    db = SessionLocal()
+    try:
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            raise HTTPException(404, "Lead não encontrado")
+        db.delete(lead)
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
 @app.post("/admin/login")
 def admin_login(_: None = Depends(_checar_admin)):
     return {"ok": True}
