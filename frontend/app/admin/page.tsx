@@ -15,6 +15,7 @@ import {
   syncNow,
 } from "../lib/api";
 import { formatDuration, formatDateTime } from "../lib/format";
+import { exportarExcel } from "./export";
 
 const STATUS_COLOR: Record<string, string> = {
   "Negócio Fechado": "#0ca30c",
@@ -122,6 +123,20 @@ function AdminDashboard() {
     return Math.max(1, ...Object.values(stats.por_resposta));
   }, [stats]);
 
+  const negociosFechados = useMemo(
+    () => (leads ?? []).filter((l) => l.response === "Negócio Fechado"),
+    [leads]
+  );
+
+  const reservasPorFranqueado = useMemo(() => {
+    const contagem = new Map<string, number>();
+    for (const lead of leads ?? []) {
+      if (!lead.reserved_by) continue;
+      contagem.set(lead.reserved_by, (contagem.get(lead.reserved_by) ?? 0) + 1);
+    }
+    return [...contagem.entries()].sort((a, b) => b[1] - a[1]);
+  }, [leads]);
+
   async function handleReatribuir(lead: Lead) {
     const franqueado = reatribuirSelecao[lead.id];
     if (!franqueado) return;
@@ -152,6 +167,13 @@ function AdminDashboard() {
               {statsMesAtual.nome}: recebemos {statsMesAtual.total_leads} leads
             </p>
           )}
+          <button
+            onClick={() => stats && exportarExcel(stats, leads ?? [])}
+            disabled={!stats}
+            className="bg-[#c2a360] text-[#072a3c] px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition shrink-0 disabled:opacity-40"
+          >
+            Exportar Excel
+          </button>
           <div className="flex flex-col items-end gap-1">
             <button
               onClick={loadAll}
@@ -212,6 +234,7 @@ function AdminDashboard() {
                   <tr className="text-left text-gray-500 border-b">
                     <th className="p-3">Mês</th>
                     <th className="p-3">Total de leads</th>
+                    <th className="p-3">Negócio Fechado</th>
                     <th className="p-3">Conversão</th>
                     <th className="p-3">Tempo médio p/ reservar</th>
                     <th className="p-3">Tempo médio p/ responder</th>
@@ -222,6 +245,7 @@ function AdminDashboard() {
                     <tr key={m.mes} className="border-b last:border-0">
                       <td className="p-3 font-medium">{m.nome}</td>
                       <td className="p-3 tabular-nums">{m.total_leads}</td>
+                      <td className="p-3 tabular-nums">{m.por_resposta["Negócio Fechado"] ?? 0}</td>
                       <td className="p-3 tabular-nums">
                         {m.total_leads > 0
                           ? `${((m.por_resposta["Negócio Fechado"] ?? 0) / m.total_leads * 100).toFixed(1)}%`
@@ -256,6 +280,73 @@ function AdminDashboard() {
                     <span className="w-8 text-sm text-[#0b0b0b] text-right tabular-nums">{value}</span>
                   </div>
                 ))}
+              </div>
+            </section>
+
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
+                <h2 className="text-base font-semibold text-[#072a3c] px-5 pt-5 pb-3">
+                  Negócios fechados ({negociosFechados.length})
+                </h2>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b">
+                      <th className="p-3">Cliente</th>
+                      <th className="p-3">Franqueado</th>
+                      <th className="p-3">Fechado em</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {negociosFechados.length === 0 && (
+                      <tr>
+                        <td className="p-3 text-gray-400 italic" colSpan={3}>
+                          Nenhum negócio fechado ainda.
+                        </td>
+                      </tr>
+                    )}
+                    {negociosFechados.map((lead) => (
+                      <tr key={lead.id} className="border-b last:border-0">
+                        <td className="p-3">
+                          <div className="font-medium">{lead.full_name}</div>
+                          <div className="text-gray-400 text-xs">{lead.phone_number}</div>
+                        </td>
+                        <td className="p-3">{lead.reserved_by}</td>
+                        <td className="p-3 text-gray-400">
+                          {lead.response_at && formatDateTime(lead.response_at)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
+                <h2 className="text-base font-semibold text-[#072a3c] px-5 pt-5 pb-3">
+                  Reservas por franqueado
+                </h2>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-500 border-b">
+                      <th className="p-3">Franqueado</th>
+                      <th className="p-3">Leads reservados</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reservasPorFranqueado.length === 0 && (
+                      <tr>
+                        <td className="p-3 text-gray-400 italic" colSpan={2}>
+                          Nenhuma reserva ainda.
+                        </td>
+                      </tr>
+                    )}
+                    {reservasPorFranqueado.map(([franqueado, qtd]) => (
+                      <tr key={franqueado} className="border-b last:border-0">
+                        <td className="p-3 font-medium">{franqueado}</td>
+                        <td className="p-3 tabular-nums">{qtd}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
 
