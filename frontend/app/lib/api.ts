@@ -121,3 +121,14 @@ export const reatribuirLead = (id: string, franqueado: string) =>
     method: "POST",
     body: JSON.stringify({ franqueado }),
   });
+
+export const criarLeadManual = (data: {
+  full_name: string;
+  phone_number?: string;
+  email?: string;
+  franqueado?: string;
+}) =>
+  adminApi<Lead>("/admin/leads/manual", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });

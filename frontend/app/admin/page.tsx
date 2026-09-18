@@ -13,6 +13,7 @@ import {
   setAdminPassword,
   clearAdminPassword,
   syncNow,
+  criarLeadManual,
 } from "../lib/api";
 import { formatDuration, formatDateTime } from "../lib/format";
 
@@ -93,6 +94,7 @@ function AdminDashboard() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date | null>(null);
+  const [mostrarCadastroManual, setMostrarCadastroManual] = useState(false);
 
   async function loadAll() {
     setSincronizando(true);
@@ -150,6 +152,18 @@ function AdminDashboard() {
     }
   }
 
+  async function handleCadastrarManual(data: {
+    full_name: string;
+    phone_number?: string;
+    email?: string;
+    franqueado?: string;
+  }) {
+    const novo = await criarLeadManual(data);
+    setLeads((prev) => [novo, ...(prev ?? [])]);
+    setMostrarCadastroManual(false);
+    loadAll();
+  }
+
   const mesAtual = new Date().getMonth() + 1;
   const statsMesAtual = stats?.meses.find((m) => m.mes === mesAtual);
 
@@ -166,6 +180,12 @@ function AdminDashboard() {
               {statsMesAtual.nome}: recebemos {statsMesAtual.total_leads} leads
             </p>
           )}
+          <button
+            onClick={() => setMostrarCadastroManual(true)}
+            className="bg-[#c2a360] text-[#072a3c] px-4 py-2 rounded text-sm font-medium hover:opacity-90 transition shrink-0"
+          >
+            + Cadastrar Lead
+          </button>
           <div className="flex flex-col items-end gap-1">
             <button
               onClick={loadAll}
@@ -182,6 +202,14 @@ function AdminDashboard() {
           </div>
         </div>
       </header>
+
+      {mostrarCadastroManual && (
+        <ModalCadastroManual
+          franqueados={franqueados}
+          onFechar={() => setMostrarCadastroManual(false)}
+          onSalvar={handleCadastrarManual}
+        />
+      )}
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-8">
         {error && (
@@ -401,6 +429,123 @@ function AdminDashboard() {
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function ModalCadastroManual({
+  franqueados,
+  onFechar,
+  onSalvar,
+}: {
+  franqueados: string[];
+  onFechar: () => void;
+  onSalvar: (data: {
+    full_name: string;
+    phone_number?: string;
+    email?: string;
+    franqueado?: string;
+  }) => Promise<void>;
+}) {
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [email, setEmail] = useState("");
+  const [franqueado, setFranqueado] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nome.trim()) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      await onSalvar({
+        full_name: nome.trim(),
+        phone_number: telefone.trim() || undefined,
+        email: email.trim() || undefined,
+        franqueado: franqueado || undefined,
+      });
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao cadastrar lead");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm space-y-4"
+      >
+        <h2 className="text-lg font-semibold text-[#072a3c]">Cadastrar lead manualmente</h2>
+
+        <div>
+          <label className="text-sm text-[#52514e] block mb-1">Nome *</label>
+          <input
+            autoFocus
+            required
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="border rounded px-3 py-2 w-full text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm text-[#52514e] block mb-1">Telefone</label>
+          <input
+            value={telefone}
+            onChange={(e) => setTelefone(e.target.value)}
+            className="border rounded px-3 py-2 w-full text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm text-[#52514e] block mb-1">E-mail</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="border rounded px-3 py-2 w-full text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm text-[#52514e] block mb-1">Reservar para (opcional)</label>
+          <select
+            value={franqueado}
+            onChange={(e) => setFranqueado(e.target.value)}
+            className="border rounded px-3 py-2 w-full text-sm"
+          >
+            <option value="">Não reservar agora</option>
+            {franqueados.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {erro && <p className="text-red-600 text-sm">{erro}</p>}
+
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onFechar}
+            className="flex-1 border px-4 py-2 rounded text-sm text-[#52514e]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={!nome.trim() || salvando}
+            className="flex-1 bg-[#072a3c] text-white px-4 py-2 rounded text-sm disabled:opacity-40"
+          >
+            {salvando ? "Salvando..." : "Cadastrar"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

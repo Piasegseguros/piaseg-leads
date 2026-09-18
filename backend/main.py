@@ -1,7 +1,9 @@
 import logging
 import os
 import time
+import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI, HTTPException, Header
@@ -197,6 +199,41 @@ def responder(lead_id: str, body: RespostaRequest):
 
         lead.response = body.resposta
         lead.response_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(lead)
+        return _serialize(lead)
+    finally:
+        db.close()
+
+
+class LeadManualRequest(BaseModel):
+    full_name: str
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+    franqueado: Optional[str] = None
+
+
+@app.post("/admin/leads/manual")
+def criar_lead_manual(body: LeadManualRequest, _: None = Depends(_checar_admin)):
+    if body.franqueado:
+        ativos = get_franqueados_ativos()
+        if body.franqueado not in ativos:
+            raise HTTPException(400, "Franqueado não encontrado na lista")
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        lead = Lead(
+            id=f"manual:{uuid.uuid4()}",
+            created_time=now,
+            full_name=body.full_name,
+            email=body.email,
+            phone_number=body.phone_number,
+            synced_at=now,
+            reserved_by=body.franqueado,
+            reserved_at=now if body.franqueado else None,
+        )
+        db.add(lead)
         db.commit()
         db.refresh(lead)
         return _serialize(lead)
