@@ -15,6 +15,7 @@ export type Lead = {
   response_at: string | null;
   tempo_reserva_segundos: number | null;
   tempo_resposta_segundos: number | null;
+  anexo_nome: string | null;
 };
 
 const RETRY_DELAYS_MS = [2000, 4000, 8000, 12000];
@@ -29,10 +30,13 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     let res: Response;
     try {
+      const isFormData = options?.body instanceof FormData;
       res = await fetch(`${API}${path}`, {
         ...options,
         cache: "no-store",
-        headers: { "Content-Type": "application/json", ...options?.headers },
+        headers: isFormData
+          ? { ...options?.headers }
+          : { "Content-Type": "application/json", ...options?.headers },
       });
     } catch (e) {
       // "Failed to fetch": normalmente o backend gratuito no Render está
@@ -127,8 +131,28 @@ export const criarLeadManual = (data: {
   phone_number?: string;
   email?: string;
   franqueado?: string;
-}) =>
-  adminApi<Lead>("/admin/leads/manual", {
-    method: "POST",
-    body: JSON.stringify(data),
+  anexo?: File;
+}) => {
+  const formData = new FormData();
+  formData.set("full_name", data.full_name);
+  if (data.phone_number) formData.set("phone_number", data.phone_number);
+  if (data.email) formData.set("email", data.email);
+  if (data.franqueado) formData.set("franqueado", data.franqueado);
+  if (data.anexo) formData.set("anexo", data.anexo);
+  return adminApi<Lead>("/admin/leads/manual", { method: "POST", body: formData });
+};
+
+export async function baixarAnexo(id: string, nomeArquivo: string) {
+  const password = getAdminPassword() ?? "";
+  const res = await fetch(`${API}/admin/leads/${encodeURIComponent(id)}/anexo`, {
+    headers: { "X-Admin-Password": password },
   });
+  if (!res.ok) throw new Error("Não foi possível baixar o anexo");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeArquivo;
+  a.click();
+  URL.revokeObjectURL(url);
+}

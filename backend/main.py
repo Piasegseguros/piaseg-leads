@@ -3,13 +3,13 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import Depends, FastAPI, HTTPException, Header
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Header, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 
 from database import Base, engine, SessionLocal
 from models import Lead
@@ -42,6 +42,15 @@ def _as_utc(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 Base.metadata.create_all(bind=engine)
+
+if engine.dialect.name == "postgresql":
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR"))
+        conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS attachment_content_type VARCHAR"))
+        conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS attachment_data BYTEA"))
+
+ANEXO_EXTENSOES_PERMITIDAS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
+ANEXO_TAMANHO_MAXIMO = 10 * 1024 * 1024
 
 app = FastAPI(title="Piaseg Leads")
 
@@ -115,6 +124,7 @@ def _serialize(lead: Lead):
         "response_at": lead.response_at,
         "tempo_reserva_segundos": tempo_reserva_s,
         "tempo_resposta_segundos": tempo_resposta_s,
+        "anexo_nome": lead.attachment_filename,
     }
 
 
@@ -206,19 +216,33 @@ def responder(lead_id: str, body: RespostaRequest):
         db.close()
 
 
-class LeadManualRequest(BaseModel):
-    full_name: str
-    phone_number: Optional[str] = None
-    email: Optional[str] = None
-    franqueado: Optional[str] = None
-
-
 @app.post("/admin/leads/manual")
-def criar_lead_manual(body: LeadManualRequest, _: None = Depends(_checar_admin)):
-    if body.franqueado:
+async def criar_lead_manual(
+    full_name: str = Form(...),
+    phone_number: str = Form(None),
+    email: str = Form(None),
+    franqueado: str = Form(None),
+    anexo: UploadFile = File(None),
+    _: None = Depends(_checar_admin),
+):
+    if franqueado:
         ativos = get_franqueados_ativos()
-        if body.franqueado not in ativos:
+        if franqueado not in ativos:
             raise HTTPException(400, "Franqueado não encontrado na lista")
+
+    attachment_filename = None
+    attachment_content_type = None
+    attachment_data = None
+    if anexo is not None and anexo.filename:
+        ext = os.path.splitext(anexo.filename)[1].lower()
+        if ext not in ANEXO_EXTENSOES_PERMITIDAS:
+            raise HTTPException(400, "Tipo de arquivo não permitido (use PDF, Word, Excel ou PPT)")
+        conteudo = await anexo.read()
+        if len(conteudo) > ANEXO_TAMANHO_MAXIMO:
+            raise HTTPException(400, "Arquivo muito grande (máximo 10MB)")
+        attachment_filename = anexo.filename
+        attachment_content_type = anexo.content_type
+        attachment_data = conteudo
 
     db = SessionLocal()
     try:
@@ -226,17 +250,36 @@ def criar_lead_manual(body: LeadManualRequest, _: None = Depends(_checar_admin))
         lead = Lead(
             id=f"manual:{uuid.uuid4()}",
             created_time=now,
-            full_name=body.full_name,
-            email=body.email,
-            phone_number=body.phone_number,
+            full_name=full_name,
+            email=email or None,
+            phone_number=phone_number or None,
             synced_at=now,
-            reserved_by=body.franqueado,
-            reserved_at=now if body.franqueado else None,
+            reserved_by=franqueado or None,
+            reserved_at=now if franqueado else None,
+            attachment_filename=attachment_filename,
+            attachment_content_type=attachment_content_type,
+            attachment_data=attachment_data,
         )
         db.add(lead)
         db.commit()
         db.refresh(lead)
         return _serialize(lead)
+    finally:
+        db.close()
+
+
+@app.get("/admin/leads/{lead_id}/anexo")
+def baixar_anexo(lead_id: str, _: None = Depends(_checar_admin)):
+    db = SessionLocal()
+    try:
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead or not lead.attachment_data:
+            raise HTTPException(404, "Anexo não encontrado")
+        return Response(
+            content=lead.attachment_data,
+            media_type=lead.attachment_content_type or "application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{lead.attachment_filename}"'},
+        )
     finally:
         db.close()
 

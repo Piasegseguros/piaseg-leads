@@ -14,6 +14,7 @@ import {
   clearAdminPassword,
   syncNow,
   criarLeadManual,
+  baixarAnexo,
 } from "../lib/api";
 import { formatDuration, formatDateTime } from "../lib/format";
 
@@ -157,6 +158,7 @@ function AdminDashboard() {
     phone_number?: string;
     email?: string;
     franqueado?: string;
+    anexo?: File;
   }) {
     const novo = await criarLeadManual(data);
     setLeads((prev) => [novo, ...(prev ?? [])]);
@@ -381,6 +383,7 @@ function AdminDashboard() {
                     <th className="p-3">Tempo p/ reservar</th>
                     <th className="p-3">Tempo p/ responder</th>
                     <th className="p-3">Entrou em</th>
+                    <th className="p-3">Anexo</th>
                     <th className="p-3">Reatribuir</th>
                   </tr>
                 </thead>
@@ -396,6 +399,18 @@ function AdminDashboard() {
                       <td className="p-3">{formatDuration(lead.tempo_reserva_segundos)}</td>
                       <td className="p-3">{formatDuration(lead.tempo_resposta_segundos)}</td>
                       <td className="p-3 text-gray-400">{formatDateTime(lead.synced_at)}</td>
+                      <td className="p-3">
+                        {lead.anexo_nome ? (
+                          <button
+                            onClick={() => baixarAnexo(lead.id, lead.anexo_nome!)}
+                            className="text-[#072a3c] underline text-xs"
+                          >
+                            📎 {lead.anexo_nome}
+                          </button>
+                        ) : (
+                          <span className="text-gray-300 text-xs">-</span>
+                        )}
+                      </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
                           <select
@@ -445,12 +460,14 @@ function ModalCadastroManual({
     phone_number?: string;
     email?: string;
     franqueado?: string;
+    anexo?: File;
   }) => Promise<void>;
 }) {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
   const [franqueado, setFranqueado] = useState("");
+  const [anexo, setAnexo] = useState<File | undefined>();
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -465,6 +482,7 @@ function ModalCadastroManual({
         phone_number: telefone.trim() || undefined,
         email: email.trim() || undefined,
         franqueado: franqueado || undefined,
+        anexo,
       });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao cadastrar lead");
@@ -525,6 +543,18 @@ function ModalCadastroManual({
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="text-sm text-[#52514e] block mb-1">
+            Anexo (PDF, Word, Excel ou PPT)
+          </label>
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+            onChange={(e) => setAnexo(e.target.files?.[0])}
+            className="border rounded px-3 py-2 w-full text-sm file:mr-2"
+          />
         </div>
 
         {erro && <p className="text-red-600 text-sm">{erro}</p>}

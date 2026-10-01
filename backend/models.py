@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, DateTime, LargeBinary
 from database import Base
 
 
@@ -19,3 +19,7 @@ class Lead(Base):
 
     response = Column(String, nullable=True)
     response_at = Column(DateTime(timezone=True), nullable=True)
+
+    attachment_filename = Column(String, nullable=True)
+    attachment_content_type = Column(String, nullable=True)
+    attachment_data = Column(LargeBinary, nullable=True)
