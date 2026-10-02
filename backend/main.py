@@ -48,6 +48,7 @@ if engine.dialect.name == "postgresql":
         conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS attachment_filename VARCHAR"))
         conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS attachment_content_type VARCHAR"))
         conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS attachment_data BYTEA"))
+        conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tipo_seguro VARCHAR"))
 
 ANEXO_EXTENSOES_PERMITIDAS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
 ANEXO_TAMANHO_MAXIMO = 10 * 1024 * 1024
@@ -118,6 +119,7 @@ def _serialize(lead: Lead):
         "phone_number": lead.phone_number,
         "campaign_name": lead.campaign_name,
         "ad_name": lead.ad_name,
+        "tipo_seguro": lead.tipo_seguro,
         "reserved_by": lead.reserved_by,
         "reserved_at": lead.reserved_at,
         "response": lead.response,

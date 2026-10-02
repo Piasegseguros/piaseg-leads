@@ -12,6 +12,7 @@ class Lead(Base):
     phone_number = Column(String, nullable=True)
     campaign_name = Column(String, nullable=True)
     ad_name = Column(String, nullable=True)
+    tipo_seguro = Column(String, nullable=True)
     synced_at = Column(DateTime(timezone=True), nullable=False)
 
     reserved_by = Column(String, nullable=True)
