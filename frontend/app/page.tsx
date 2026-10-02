@@ -249,6 +249,11 @@ function LeadInfo({ lead, ordem }: { lead: Lead; ordem?: number }) {
       <span className="font-medium text-[#072a3c]">{lead.full_name}</span>
       {lead.phone_number && <span className="text-sm text-gray-500">{lead.phone_number}</span>}
       {lead.email && <span className="text-sm text-gray-400">{lead.email}</span>}
+      {lead.tipo_seguro && (
+        <span className="text-sm text-[#072a3c] bg-[#f0efec] px-2 py-0.5 rounded">
+          {lead.tipo_seguro}
+        </span>
+      )}
       <span className="text-sm text-red-600 font-medium">
         entrou em {formatDateTime(lead.synced_at)}
       </span>

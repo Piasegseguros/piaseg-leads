@@ -378,6 +378,7 @@ function AdminDashboard() {
                 <thead>
                   <tr className="text-left text-gray-500 border-b">
                     <th className="p-3">Lead</th>
+                    <th className="p-3">Tipo de seguro</th>
                     <th className="p-3">Franqueado</th>
                     <th className="p-3">Resposta</th>
                     <th className="p-3">Tempo p/ reservar</th>
@@ -394,6 +395,7 @@ function AdminDashboard() {
                         <div className="font-medium">{lead.full_name}</div>
                         <div className="text-gray-400 text-xs">{lead.phone_number}</div>
                       </td>
+                      <td className="p-3">{lead.tipo_seguro ?? "-"}</td>
                       <td className="p-3">{lead.reserved_by ?? "-"}</td>
                       <td className="p-3">{lead.response ?? "-"}</td>
                       <td className="p-3">{formatDuration(lead.tempo_reserva_segundos)}</td>

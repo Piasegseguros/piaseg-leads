@@ -9,6 +9,7 @@ export type Lead = {
   phone_number: string | null;
   campaign_name: string | null;
   ad_name: string | null;
+  tipo_seguro: string | null;
   reserved_by: string | null;
   reserved_at: string | null;
   response: string | null;
